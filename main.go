@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"math/rand"
@@ -18,7 +19,7 @@ const (
 	dsn = "root@tcp(localhost:4000)/"
 
 	// Size of padding in bytes
-	paddingSize = 512
+	paddingSize = 256
 
 	maxValue0 = 1000
 )
@@ -89,10 +90,8 @@ func setupDatabase(db *sql.DB) error {
 		id int NOT NULL AUTO_INCREMENT,
 		val0 int NOT NULL,
 		val1 int NOT NULL,
-		padding varbinary(%v) NOT NULL DEFAULT 0x0,
-		PRIMARY KEY (id),
-		UNIQUE KEY val0_unique_idx (val0),
-		KEY val1_idx (val1)
+		padding varchar(%v) NOT NULL DEFAULT '',
+		PRIMARY KEY (id)
 	)`, paddingSize)
 
 	_, err = db.Exec(createTableSQL)
@@ -101,9 +100,15 @@ func setupDatabase(db *sql.DB) error {
 	}
 
 	// Small batch size for easier to reproduce
-	_, err = db.Exec(`set @@global.tidb_ddl_reorg_batch_size = 32`)
-	if err != nil {
-		return fmt.Errorf("failed to set DDL reorg batch size: %w", err)
+	vars := []string{
+		`set @@global.tidb_ddl_reorg_worker_cnt = 1`,
+		`set @@global.tidb_ddl_reorg_batch_size = 32`,
+	}
+	for _, v := range vars {
+		_, err = db.Exec(v)
+		if err != nil {
+			return fmt.Errorf("failed to set variable: %s, %w", v, err)
+		}
 	}
 
 	fmt.Println("Database and table created successfully")
@@ -113,20 +118,23 @@ func setupDatabase(db *sql.DB) error {
 func insertDeleteWorker(db *sql.DB, workerID int) {
 	fmt.Printf("Worker %d started\n", workerID)
 
+	paddingBuffer := make([]byte, paddingSize/2)
+
 	for {
 		rowsPerOperation := []int{10, 50, 100, 200}[rand.Intn(4)]
+		paddingBuffer = paddingBuffer[:rowsPerOperation/2]
 
 		val0Values := make([]int, rowsPerOperation)
 		val1Values := make([]int, rowsPerOperation)
-		paddingValues := make([][]byte, rowsPerOperation)
+		paddingValues := make([]string, rowsPerOperation)
 
 		val0 := rand.Intn(maxValue0)
 		for i := 0; i < rowsPerOperation; i++ {
 			val0Values[i] = val0
 			val1Values[i] = val0 * 10
-			paddingValues[i] = make([]byte, paddingSize)
 			// Fill padding with random data
-			rand.Read(paddingValues[i])
+			rand.Read(paddingBuffer)
+			paddingValues[i] = hex.EncodeToString(paddingBuffer)
 
 			val0 = (val0 + 1) % maxValue0
 		}
@@ -149,7 +157,7 @@ func insertDeleteWorker(db *sql.DB, workerID int) {
 	}
 }
 
-func insertRows(db *sql.DB, val0Values, val1Values []int, paddingValues [][]byte, workerID int) error {
+func insertRows(db *sql.DB, val0Values, val1Values []int, paddingValues []string, workerID int) error {
 	// Build insert query with multiple values
 	valueStrings := make([]string, len(val0Values))
 	args := make([]interface{}, 0, len(val0Values)*2)
