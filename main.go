@@ -19,6 +19,8 @@ const (
 
 	// Size of padding in bytes
 	paddingSize = 512
+
+	maxValue0 = 1000
 )
 
 func main() {
@@ -118,12 +120,15 @@ func insertDeleteWorker(db *sql.DB, workerID int) {
 		val1Values := make([]int, rowsPerOperation)
 		paddingValues := make([][]byte, rowsPerOperation)
 
+		val0 := rand.Intn(maxValue0)
 		for i := 0; i < rowsPerOperation; i++ {
-			val0Values[i] = rand.Intn(1000)
-			val1Values[i] = val0Values[i] * 10
+			val0Values[i] = val0
+			val1Values[i] = val0 * 10
 			paddingValues[i] = make([]byte, paddingSize)
 			// Fill padding with random data
 			rand.Read(paddingValues[i])
+
+			val0 = (val0 + 1) % maxValue0
 		}
 
 		// Perform insert operation
