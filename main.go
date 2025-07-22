@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"log"
 	"math/rand"
@@ -24,7 +25,14 @@ const (
 	maxValue0 = 1000
 )
 
+var (
+	withIndex = flag.Bool("with-index", false, "Create index on val0 column")
+)
+
 func main() {
+	// Parse command line arguments
+	flag.Parse()
+
 	// Connect to MySQL
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -97,6 +105,16 @@ func setupDatabase(db *sql.DB) error {
 	_, err = db.Exec(createTableSQL)
 	if err != nil {
 		return fmt.Errorf("failed to create table: %w", err)
+	}
+
+	// Create index on val0 if -with-index flag is provided
+	if *withIndex {
+		fmt.Println("Creating index on val0 column...")
+		_, err = db.Exec("CREATE INDEX val0_idx ON `uniq`.`rows` (val0)")
+		if err != nil {
+			return fmt.Errorf("failed to create index on val0: %w", err)
+		}
+		fmt.Println("Index on val0 created successfully")
 	}
 
 	// Small batch size for easier to reproduce

@@ -1,15 +1,16 @@
-# MySQL DDL and Delete Program
+# TiDB DDL and Delete Program
 
-This Go program demonstrates concurrent database operations with MySQL including:
+This Go program demonstrates concurrent database operations with TiDB including:
+
 - Concurrent insert/delete operations with 4 goroutines
 - DDL operations (ALTER TABLE) with 1 goroutine
 - Handling unique constraints and duplicate key errors
 
 ## Prerequisites
 
-1. **MySQL Server**: Make sure MySQL is running and accessible
+1. **TiDB Server**: Make sure TiDB is running and accessible
 2. **Go**: Go 1.23.3 or later
-3. **MySQL Driver**: Already included in go.mod
+3. **TiDB Driver**: Already included in go.mod
 
 ## Database Configuration
 
@@ -19,16 +20,19 @@ Before running the program, you need to update the database connection string in
 const dsn = "root:password@tcp(localhost:3306)/"
 ```
 
-Replace with your MySQL credentials:
-- `root`: your MySQL username
-- `password`: your MySQL password
-- `localhost:3306`: your MySQL host and port
+Replace with your TiDB credentials:
+
+- `root`: your TiDB username
+- `password`: your TiDB password
+- `localhost:3306`: your TiDB host and port
 
 ## What the Program Does
 
 ### 1. Database Setup
+
 - Creates database `uniq` if it doesn't exist
 - Creates table `rows` with the specified schema:
+
   ```sql
   CREATE TABLE uniq.rows (
       id int NOT NULL AUTO_INCREMENT,
@@ -41,32 +45,57 @@ Replace with your MySQL credentials:
   ```
 
 ### 2. Insert/Delete Workers (4 goroutines)
+
 Each worker repeatedly:
+
 - Generates 10 random `val0` values (0-1000)
 - Calculates `val1` as `val0 * 10`
 - Inserts the rows (handles duplicate key errors gracefully)
 - Deletes the same rows using the `val0` values
 
 ### 3. DDL Worker (1 goroutine)
+
 Every 10 seconds alternates between:
+
 - `ALTER TABLE uniq.rows MODIFY COLUMN val0 bigint NOT NULL`
 - `ALTER TABLE uniq.rows MODIFY COLUMN val0 int NOT NULL`
 
 ## Running the Program
 
 1. **Install dependencies**:
+
    ```bash
    go mod tidy
    ```
 
-2. **Run the program**:
+2. **Build the program**:
+
    ```bash
-   go run main.go
+   go build .
    ```
+
+3. **Run the program**:
+
+   **Without index on val0:**
+
+   ```bash
+   ./main
+   ```
+
+   **With index on val0:**
+
+   ```bash
+   ./main -with-index
+   ```
+
+## Command Line Arguments
+
+- **`-with-index`**: Creates an index on the `val0` column when this flag is provided. Without this flag, the table is created without any additional indexes beyond the primary key.
 
 ## Expected Output
 
 The program will output logs showing:
+
 - Database connection status
 - Worker operations (inserts/deletes)
 - DDL operations
